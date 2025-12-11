@@ -1,0 +1,198 @@
+---
+- name: Prepare
+  hosts: all
+  gather_facts: true
+  vars_files:
+    - ../group_vars/all/vars.yml
+  vars:
+    sudo_pkg_name: 'sudo'
+  tasks:
+    - name: "Ensure {{ sudo_pkg_name }} is installed (if user is root)."
+      ansible.builtin.yum:
+        name: "{{ sudo_pkg_name }}"
+      when:
+        - ansible_user_id == 'root'
+
+    - name: Gather the package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: "Check if {{ sudo_pkg_name }} is installed."
+      ansible.builtin.assert:
+        that:
+          - sudo_pkg_name in ansible_facts.packages
+
+    - name: "Ensure required packages are installed."
+      become: "{{ wildfly_install_requires_become | default(true) }}"
+      ansible.builtin.yum:
+        name:
+          - java-17-openjdk
+          - procps-ng
+          - tzdata-java
+        state: present
+
+    - name: "Ensure files directory exists on controller"
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../files"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+
+    - name: "Download test application to controller"
+      ansible.builtin.get_url:
+        url: "https://github.com/rpelisse/simple-servlet/releases/download/info_wfly31_1.2/info-1.2.war"
+        dest: "{{ playbook_dir }}/../files/test-app.war"
+        mode: '0644'
+      delegate_to: localhost
+      run_once: true
+
+    - name: "Install WildFly"
+      ansible.builtin.include_role:
+        name: wildfly_install
+      # Note: wildfly_install always uses standalone/configuration/, 
+      # so we'll set up domain mode manually after installation
+
+    - name: "Set wildfly_home fact"
+      ansible.builtin.set_fact:
+        wildfly_home: "{{ wildfly_install_workdir | default('/opt/wildfly/') }}wildfly-{{ wildfly_version | default('38.0.0.Final') }}/"
+      vars:
+        wildfly_install_workdir: '/opt/wildfly/'
+        wildfly_version: '38.0.0.Final'
+
+    - name: "Ensure PID directory exists"
+      ansible.builtin.file:
+        path: /run/wildfly
+        state: directory
+        owner: wildfly
+        group: wildfly
+        mode: '0755'
+      become: true
+
+    - name: "Create domain mode systemd service file"
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=WildFly Application Server (domain mode)
+          After=syslog.target network.target
+          Before=httpd.service
+
+          [Service]
+          Environment=LAUNCH_JBOSS_IN_BACKGROUND=1
+          EnvironmentFile=-/etc/sysconfig/wildfly
+          User=wildfly
+          Group=wildfly
+          RuntimeDirectory=wildfly
+          PIDFile=/run/wildfly/wildfly.pid
+          ExecStart={{ wildfly_home }}/bin/domain.sh
+          SuccessExitStatus = 0 143
+          RestartSec = 120
+          Restart = on-failure
+          LimitNOFILE=102642
+          TimeoutSec=600
+
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/wildfly.service
+        mode: '0644'
+      vars:
+        wildfly_home: "{{ wildfly_install_workdir | default('/opt/wildfly/') }}wildfly-{{ wildfly_version | default('38.0.0.Final') }}/"
+        wildfly_install_workdir: '/opt/wildfly/'
+        wildfly_version: '38.0.0.Final'
+      become: true
+      notify: reload systemd
+
+    - name: "Get actual JAVA_HOME path"
+      ansible.builtin.shell: |
+        if [ -d /usr/lib/jvm/java-17-openjdk ]; then
+          echo /usr/lib/jvm/java-17-openjdk
+        elif [ -d /usr/lib/jvm/java-17 ]; then
+          echo /usr/lib/jvm/java-17
+        else
+          ls -d /usr/lib/jvm/java-*-openjdk* 2>/dev/null | head -1 || echo /usr/lib/jvm/java-17-openjdk
+        fi
+      register: java_home_result
+      changed_when: false
+
+    - name: "Create systemd environment file for domain mode"
+      ansible.builtin.copy:
+        content: |
+          JAVA_HOME={{ java_home_result.stdout }}
+          JAVA_OPTS='-Xmx1024M -Xms512M'
+          WILDFLY_BIND=0.0.0.0
+          WILDFLY_BIND_MGMT=127.0.0.1
+          WILDFLY_HOME={{ wildfly_home }}
+          JBOSS_PIDFILE=/run/wildfly/wildfly.pid
+          WILDFLY_SERVER_CONFIG=domain.xml
+          WILDFLY_OPTS=-Djboss.bind.address.private=127.0.0.1 -Djboss.default.multicast.address=230.0.0.4 -Djboss.server.config.dir={{ wildfly_home }}domain/configuration/ -Djboss.domain.base.dir={{ wildfly_home }}domain/ -Djboss.tx.node.id=wildfly -Djboss.node.name=wildfly -Djboss.socket.binding.port-offset=0 -Dwildfly.statistics-enabled=false
+        dest: /etc/sysconfig/wildfly
+        mode: '0644'
+      vars:
+        wildfly_home: "{{ wildfly_install_workdir | default('/opt/wildfly/') }}wildfly-{{ wildfly_version | default('38.0.0.Final') }}/"
+        wildfly_install_workdir: '/opt/wildfly/'
+        wildfly_version: '38.0.0.Final'
+      become: true
+
+    - name: "Perform daemon-reload"
+      ansible.builtin.systemd:
+        daemon_reload: true
+      become: true
+
+    - name: "Start WildFly domain service"
+      ansible.builtin.systemd:
+        name: wildfly
+        state: started
+        enabled: true
+      become: true
+
+    - name: "Check WildFly service status"
+      ansible.builtin.command: systemctl status wildfly --no-pager
+      register: service_status
+      failed_when: false
+      become: true
+
+    - name: "Display service status"
+      ansible.builtin.debug:
+        var: service_status.stdout_lines
+
+    - name: "Check systemd journal for WildFly errors"
+      ansible.builtin.command: journalctl -u wildfly -n 50 --no-pager
+      register: journal_logs
+      failed_when: false
+      become: true
+
+    - name: "Display systemd journal logs"
+      ansible.builtin.debug:
+        var: journal_logs.stdout_lines
+
+    - name: "Check WildFly domain logs for errors"
+      ansible.builtin.command: tail -50 {{ wildfly_home }}domain/log/host-controller.log
+      register: domain_logs
+      failed_when: false
+      vars:
+        wildfly_home: "{{ wildfly_install_workdir | default('/opt/wildfly/') }}wildfly-{{ wildfly_version | default('38.0.0.Final') }}/"
+        wildfly_install_workdir: '/opt/wildfly/'
+        wildfly_version: '38.0.0.Final'
+      become: true
+
+    - name: "Display domain logs"
+      ansible.builtin.debug:
+        var: domain_logs.stdout_lines
+
+    - name: "Wait for WildFly domain controller to be ready"
+      ansible.builtin.wait_for:
+        host: "{{ jboss_cli_controller_host | default('localhost') }}"
+        port: "{{ jboss_cli_controller_port | default('9990') }}"
+        delay: 15
+        timeout: 180
+
+    - name: Display Ansible version
+      ansible.builtin.debug:
+        msg: "Ansible version is {{ ansible_version.full }}, running with Python {{ ansible_python_version }}."
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+      become: true
+

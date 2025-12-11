@@ -1,0 +1,55 @@
+argument_specs:
+    main:
+        options:
+            wildfly_app_deploy_file:
+                required: True
+                description: "Path to the application artifact (.war, .ear, .jar) on the Ansible controller"
+                type: "str"
+            wildfly_app_deploy_name:
+                default: "application.war"
+                description: "The name to use for the deployment in WildFly (e.g., app-v1.war)"
+                type: "str"
+            wildfly_app_deploy_mode:
+                default: "standalone"
+                description: "Deployment mode: 'standalone' or 'domain'"
+                type: "str"
+            wildfly_app_deploy_server_groups:
+                default: []
+                description: "List of server groups to deploy to (Required if wildfly_app_deploy_mode is 'domain')"
+                type: "list"
+            wildfly_home:
+                required: False
+                description: "WildFly installation directory (inherits from wildfly_install role)"
+                type: "str"
+            jboss_home:
+                required: False
+                description: "WildFly installation directory, for backwards compatibility (inherits from wildfly_utils role)"
+                type: "str"
+            jboss_cli_controller_host:
+                default: "localhost"
+                description: "Hostname for connecting to cli"
+                type: "str"
+            jboss_cli_controller_port:
+                default: "9990"
+                description: "Port for connecting to cli"
+                type: "str"
+            wildfly_port_range_offset:
+                default: 0
+                description: "Increment for `jboss.socket.binding.port-offset`"
+                type: "int"
+            wildfly_user:
+                default: "wildfly"
+                description: "posix user account for wildfly"
+                type: "str"
+            wildfly_app_deploy_requires_privilege_escalation:
+                default: true
+                description: "Whether to use privilege escalation when copying files and executing CLI commands"
+                type: "bool"
+            wildfly_app_deploy_cli_user:
+                default: ""
+                description: "User for CLI authentication (optional, if management interface requires auth). Note: Currently not used by wildfly_utils jboss_cli task."
+                type: "str"
+            wildfly_app_deploy_cli_password:
+                default: ""
+                description: "Password for CLI authentication (optional, if management interface requires auth). Note: Currently not used by wildfly_utils jboss_cli task."
+                type: "str"

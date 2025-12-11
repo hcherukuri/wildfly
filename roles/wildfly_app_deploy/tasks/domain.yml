@@ -1,0 +1,124 @@
+---
+- name: Validate server_groups for Domain Mode
+  ansible.builtin.fail:
+    msg: "You must specify 'wildfly_app_deploy_server_groups' when wildfly_app_deploy_mode is 'domain'"
+  when: wildfly_app_deploy_server_groups | length == 0
+
+- name: Check if application is already deployed (Domain)
+  block:
+    - name: Query deployment status
+      ansible.builtin.include_role:
+        name: wildfly_utils
+        tasks_from: jboss_cli.yml
+      vars:
+        jboss_cli_query: "'/deployment={{ wildfly_app_deploy_name }}:read-resource'"
+        jboss_cli_timeout: 10
+        jboss_cli_changed_when: false
+      register: deployment_check
+  rescue:
+    - name: Deployment does not exist
+      ansible.builtin.set_fact:
+        deployment_exists: false
+  always:
+    - name: Set deployment exists flag based on check result
+      ansible.builtin.set_fact:
+        deployment_exists: "{{ deployment_check.failed is not defined or deployment_check.failed == false }}"
+      when: deployment_exists is not defined
+
+- name: Check if deployment exists in repository (Domain)
+  block:
+    - name: Query deployment in repository
+      ansible.builtin.include_role:
+        name: wildfly_utils
+        tasks_from: jboss_cli.yml
+      vars:
+        jboss_cli_query: "'deployment-info --name={{ wildfly_app_deploy_name }}'"
+        jboss_cli_timeout: 10
+        jboss_cli_changed_when: false
+      register: deployment_repo_check
+  rescue:
+    - name: Deployment not in repository
+      ansible.builtin.set_fact:
+        deployment_in_repo: false
+  always:
+    - name: Set deployment in repo flag
+      ansible.builtin.set_fact:
+        deployment_in_repo: "{{ deployment_repo_check.failed is not defined or deployment_repo_check.failed == false }}"
+      when: >
+        deployment_in_repo is not defined and
+        not (deployment_exists | default(false))
+
+- name: Deploy Application to Server Groups (Domain)
+  when: >
+    not (deployment_exists | default(false)) and
+    not (deployment_in_repo | default(false))
+  block:
+    - name: Remove existing deployment from repository if it exists
+      ansible.builtin.include_role:
+        name: wildfly_utils
+        tasks_from: jboss_cli.yml
+      vars:
+        jboss_cli_query: "'deployment remove --name={{ wildfly_app_deploy_name }}'"
+        jboss_cli_timeout: 30
+        jboss_cli_changed_when: false
+        jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
+      when: deployment_in_repo | default(false)
+      register: remove_deployment
+      ignore_errors: true
+
+    - name: Deploy new application to server groups
+      ansible.builtin.include_role:
+        name: wildfly_utils
+        tasks_from: jboss_cli.yml
+      vars:
+        jboss_cli_query: "'deploy /tmp/{{ wildfly_app_deploy_name }} --server-groups={{ wildfly_app_deploy_server_groups | join(',') }}'"
+        jboss_cli_timeout: 30
+        jboss_cli_changed_when: false
+        jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
+      register: domain_deploy_result
+
+- name: Add deployment to server groups if it exists in repository but not deployed
+  ansible.builtin.include_role:
+    name: wildfly_utils
+    tasks_from: jboss_cli.yml
+  vars:
+    jboss_cli_query: "'deployment add-server-group --name={{ wildfly_app_deploy_name }} --server-groups={{ wildfly_app_deploy_server_groups | join(',') }}'"
+    jboss_cli_timeout: 30
+    jboss_cli_changed_when: false
+    jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
+  when: >
+    not (deployment_exists | default(false)) and
+    (deployment_in_repo | default(false))
+  register: domain_add_server_group_result
+  ignore_errors: true
+
+- name: Enable Application (if disabled)
+  block:
+    - name: Check if deployment is disabled
+      ansible.builtin.include_role:
+        name: wildfly_utils
+        tasks_from: jboss_cli.yml
+      vars:
+        jboss_cli_query: "'/deployment={{ wildfly_app_deploy_name }}:read-attribute(name=enabled)'"
+        jboss_cli_timeout: 10
+        jboss_cli_changed_when: false
+      register: deployment_status
+      when: deployment_exists | default(false)
+  rescue:
+    - name: Skip enable check - deployment doesn't exist or check failed
+      ansible.builtin.set_fact:
+        deployment_needs_enable: false
+  always:
+    - name: Enable deployment if it's disabled
+      ansible.builtin.include_role:
+        name: wildfly_utils
+        tasks_from: jboss_cli.yml
+      vars:
+        jboss_cli_query: "'/deployment={{ wildfly_app_deploy_name }}:write-attribute(name=enabled,value=true)'"
+        jboss_cli_timeout: 10
+        jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
+      when: >
+        deployment_exists | default(false) and
+        deployment_status.failed is not defined and
+        deployment_status.changed is defined and
+        'false' in (deployment_status.stdout | default(''))
