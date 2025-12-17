@@ -28,7 +28,6 @@
     jboss_cli_query: "'deploy /tmp/{{ wildfly_app_deploy_name }} --force'"
     jboss_cli_timeout: 30
     jboss_cli_changed_when: false
-    jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
   when: not (deployment_exists | default(false))
   register: deploy_result
 
@@ -56,7 +55,6 @@
       vars:
         jboss_cli_query: "'/deployment={{ wildfly_app_deploy_name }}:write-attribute(name=enabled,value=true)'"
         jboss_cli_timeout: 10
-        jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
       when: >
         deployment_exists | default(false) and
         deployment_status.failed is not defined and

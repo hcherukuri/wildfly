@@ -9,10 +9,10 @@
       ansible.builtin.include_role:
         name: wildfly_app_deploy
       vars:
-        wildfly_app_deploy_file: "{{ playbook_dir }}/../files/test-app.war"
+        wildfly_app_deployment_file: "{{ playbook_dir }}/../files/test-app.war"
         wildfly_app_deploy_name: "test-app.war"
         wildfly_app_deploy_mode: "domain"
-        wildfly_app_deploy_server_groups:
+        wildfly_app_deploy_domain_server_groups:
           - main-server-group
         jboss_cli_controller_host: "localhost"
         jboss_cli_controller_port: "9990"

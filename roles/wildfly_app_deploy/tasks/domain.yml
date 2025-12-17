@@ -1,8 +1,8 @@
 ---
 - name: Validate server_groups for Domain Mode
   ansible.builtin.fail:
-    msg: "You must specify 'wildfly_app_deploy_server_groups' when wildfly_app_deploy_mode is 'domain'"
-  when: wildfly_app_deploy_server_groups | length == 0
+    msg: "You must specify 'wildfly_app_deploy_domain_server_groups' when wildfly_app_deploy_mode is 'domain'"
+  when: wildfly_app_deploy_domain_server_groups | length == 0
 
 - name: Check if application is already deployed (Domain)
   block:
@@ -61,7 +61,6 @@
         jboss_cli_query: "'deployment remove --name={{ wildfly_app_deploy_name }}'"
         jboss_cli_timeout: 30
         jboss_cli_changed_when: false
-        jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
       when: deployment_in_repo | default(false)
       register: remove_deployment
       ignore_errors: true
@@ -71,10 +70,9 @@
         name: wildfly_utils
         tasks_from: jboss_cli.yml
       vars:
-        jboss_cli_query: "'deploy /tmp/{{ wildfly_app_deploy_name }} --server-groups={{ wildfly_app_deploy_server_groups | join(',') }}'"
+        jboss_cli_query: "'deploy /tmp/{{ wildfly_app_deploy_name }} --server-groups={{ wildfly_app_deploy_domain_server_groups | join(',') }}'"
         jboss_cli_timeout: 30
         jboss_cli_changed_when: false
-        jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
       register: domain_deploy_result
 
 - name: Add deployment to server groups if it exists in repository but not deployed
@@ -82,10 +80,9 @@
     name: wildfly_utils
     tasks_from: jboss_cli.yml
   vars:
-    jboss_cli_query: "'deployment add-server-group --name={{ wildfly_app_deploy_name }} --server-groups={{ wildfly_app_deploy_server_groups | join(',') }}'"
+    jboss_cli_query: "'deployment add-server-group --name={{ wildfly_app_deploy_name }} --server-groups={{ wildfly_app_deploy_domain_server_groups | join(',') }}'"
     jboss_cli_timeout: 30
     jboss_cli_changed_when: false
-    jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
   when: >
     not (deployment_exists | default(false)) and
     (deployment_in_repo | default(false))
@@ -116,7 +113,6 @@
       vars:
         jboss_cli_query: "'/deployment={{ wildfly_app_deploy_name }}:write-attribute(name=enabled,value=true)'"
         jboss_cli_timeout: 10
-        jboss_cli_become_user: "{{ wildfly_user | default('wildfly') }}"
       when: >
         deployment_exists | default(false) and
         deployment_status.failed is not defined and

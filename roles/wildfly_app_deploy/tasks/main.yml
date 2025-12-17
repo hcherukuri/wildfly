@@ -6,11 +6,9 @@
 
 - name: Copy application to remote server (if not already present)
   ansible.builtin.copy:
-    src: "{{ wildfly_app_deploy_file }}"
+    src: "{{ wildfly_app_deployment_file }}"
     dest: "/tmp/{{ wildfly_app_deploy_name }}"
     mode: '0644'
-  become: "{{ wildfly_app_deploy_requires_privilege_escalation | default(true) }}"
-  become_user: "{{ wildfly_user | default('wildfly') }}"
 
 - name: Deploy to Standalone
   ansible.builtin.include_tasks: standalone.yml

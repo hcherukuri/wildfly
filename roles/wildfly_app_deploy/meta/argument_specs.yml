@@ -1,7 +1,7 @@
 argument_specs:
     main:
         options:
-            wildfly_app_deploy_file:
+            wildfly_app_deployment_file:
                 required: True
                 description: "Path to the application artifact (.war, .ear, .jar) on the Ansible controller"
                 type: "str"
@@ -13,7 +13,7 @@ argument_specs:
                 default: "standalone"
                 description: "Deployment mode: 'standalone' or 'domain'"
                 type: "str"
-            wildfly_app_deploy_server_groups:
+            wildfly_app_deploy_domain_server_groups:
                 default: []
                 description: "List of server groups to deploy to (Required if wildfly_app_deploy_mode is 'domain')"
                 type: "list"
@@ -40,16 +40,4 @@ argument_specs:
             wildfly_user:
                 default: "wildfly"
                 description: "posix user account for wildfly"
-                type: "str"
-            wildfly_app_deploy_requires_privilege_escalation:
-                default: true
-                description: "Whether to use privilege escalation when copying files and executing CLI commands"
-                type: "bool"
-            wildfly_app_deploy_cli_user:
-                default: ""
-                description: "User for CLI authentication (optional, if management interface requires auth). Note: Currently not used by wildfly_utils jboss_cli task."
-                type: "str"
-            wildfly_app_deploy_cli_password:
-                default: ""
-                description: "Password for CLI authentication (optional, if management interface requires auth). Note: Currently not used by wildfly_utils jboss_cli task."
                 type: "str"
