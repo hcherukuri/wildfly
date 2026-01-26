@@ -36,12 +36,12 @@
       ansible.builtin.uri:
         url: "http://localhost:{{ wildfly_http_port | default('8080') }}/test-app.war/"
         method: GET
-        status_code: [200, 404]
+        status_code: 200
         follow_redirects: all
       register: app_response
       retries: 5
       delay: 5
-      until: app_response.status in [200, 404]
+      until: app_response.status == 200
 
     - name: "Display deployment information"
       ansible.builtin.debug:

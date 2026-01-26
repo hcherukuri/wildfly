@@ -19,11 +19,11 @@ argument_specs:
                 type: "str"
             jboss_cli_controller_host:
                 default: "localhost"
-                description: "Hostname for connecting to cli"
+                description: "Hostname for connecting to CLI"
                 type: "str"
             jboss_cli_controller_port:
                 default: "9990"
-                description: "Port for connecting to cli"
+                description: "Port for connecting to CLI"
                 type: "str"
             wildfly_port_range_offset:
                 default: 0
@@ -31,5 +31,5 @@ argument_specs:
                 type: "int"
             wildfly_user:
                 default: "wildfly"
-                description: "posix user account for wildfly"
+                description: "posix user account for Wildfly"
                 type: "str"
