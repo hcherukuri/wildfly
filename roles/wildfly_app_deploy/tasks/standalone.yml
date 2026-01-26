@@ -25,7 +25,7 @@
     name: wildfly_utils
     tasks_from: jboss_cli.yml
   vars:
-    jboss_cli_query: "'deploy /tmp/{{ wildfly_app_deploy_name }} --force'"
+    jboss_cli_query: "'deploy /tmp/{{ wildfly_app_deploy_name }}'"
     jboss_cli_timeout: 300
     jboss_cli_changed_when: false
   when: not (deployment_exists | default(false))
