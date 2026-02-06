@@ -35,4 +35,5 @@
         wildfly_service_name: "wildfly-{{ item }}"
         wildfly_basedir_prefix: "{{ wildfly_instances_home }}/wildfly-{{ item }}/"
         wildfly_port_range_offset: "{{ 100 * (item) | int }}"
+        wildfly_java_package_name: "java-{{ wildfly_java_version | default(17) }}-openjdk-headless"
       loop: "{{ range(0, 3) | list }}"
